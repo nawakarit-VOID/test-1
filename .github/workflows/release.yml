@@ -1,0 +1,100 @@
+name: Release Build
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version (example: v1.0.0)"
+        required: true
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
+jobs:
+
+  build:
+    name: Build (${{ matrix.os }})
+    runs-on: ${{ matrix.runner }}
+
+    strategy:
+      matrix:
+        include:
+          - os: linux
+            runner: ubuntu-latest
+            output: app
+          - os: windows
+            runner: windows-latest
+            output: app.exe
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - uses: actions/setup-go@v5
+      with:
+        go-version: '1.22'
+
+    - name: Cache Go modules
+      uses: actions/cache@v4
+      with:
+        path: ~/go/pkg/mod
+        key: ${{ matrix.os }}-go-${{ hashFiles('**/go.sum') }}
+        restore-keys: ${{ matrix.os }}-go-
+
+    # 🔥 Linux deps (เฉพาะ linux)
+    - name: Install dependencies (Linux)
+      if: matrix.os == 'linux'
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y \
+          gcc \
+          libgl1-mesa-dev \
+          xorg-dev \
+          libx11-dev \
+          libxcursor-dev \
+          libxrandr-dev \
+          libxinerama-dev \
+          libxi-dev
+
+    - name: Build
+      run: |
+        mkdir build
+        if [ "${{ matrix.os }}" = "windows" ]; then
+          go build -ldflags="-H=windowsgui" -o build/${{ matrix.output }} main.go
+        else
+          CGO_ENABLED=1 GOOS=linux GOARCH=amd64 go build -o build/${{ matrix.output }} main.go
+        fi
+
+    # 🔥 zip ไฟล์แจก
+    - name: Archive
+      run: |
+        cd build
+        if [ "${{ matrix.os }}" = "windows" ]; then
+          powershell Compress-Archive -Path * -DestinationPath ../app-${{ matrix.os }}.zip
+        else
+          zip -r ../app-${{ matrix.os }}.zip .
+        fi
+
+    - uses: actions/upload-artifact@v4
+      with:
+        name: app-${{ matrix.os }}
+        path: app-${{ matrix.os }}.zip
+
+
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Download artifacts
+      uses: actions/download-artifact@v4
+
+    - name: Create Release
+      uses: softprops/action-gh-release@v2
+      with:
+        tag_name: ${{ github.event.inputs.version }}
+        name: Release ${{ github.event.inputs.version }}
+        files: |
+          app-linux/app-linux.zip
+          app-windows/app-windows.zip
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
