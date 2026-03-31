@@ -1,49 +1,44 @@
-name: Build Go (Fyne)
+name: Build Linux Go App
 
 on:
-  workflow_dispatch:   # กด run เองก่อน
+  push:
+    branches: [ "main" ]
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
 jobs:
   build:
     runs-on: ubuntu-latest
+    timeout-minutes: 10
 
     strategy:
       matrix:
-        goos: [linux, windows]
+        goos: [linux]
         goarch: [amd64]
 
     steps:
-    - uses: actions/checkout@v4
+      - name: Checkout code
+        uses: actions/checkout@v4
 
-    - uses: actions/setup-go@v5
-      with:
-        go-version: '1.22'
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.22'
+          cache: true
 
-    # 🔥 ติดตั้ง lib ที่ Fyne ต้องใช้
-    - name: Install dependencies
-      run: |
-        sudo apt-get update
-        sudo apt-get install -y \
-          gcc \
-          libgl1-mesa-dev \
-          xorg-dev \
-          libx11-dev \
-          libxcursor-dev \
-          libxrandr-dev \
-          libxinerama-dev \
-          libxi-dev
+      - name: Install dependencies (for Fyne)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y gcc libgl1-mesa-dev xorg-dev
 
-    - name: Build
-      run: |
-        mkdir build
+      - name: Build
+        run: |
+          mkdir -p build
+          GOOS=linux GOARCH=amd64 go build -o build/app .
 
-        if [ "${{ matrix.goos }}" = "windows" ]; then
-          GOOS=windows GOARCH=amd64 CGO_ENABLED=1 go build -o build/app.exe main.go
-        else
-          GOOS=linux GOARCH=amd64 CGO_ENABLED=1 go build -o build/app main.go
-        fi
-
-    - uses: actions/upload-artifact@v4
-      with:
-        name: app-${{ matrix.goos }}
-        path: build/
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: app-linux
+          path: build/
