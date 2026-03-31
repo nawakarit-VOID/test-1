@@ -26,9 +26,9 @@ jobs:
         run: |
           mkdir -p build
           if [ "${{ matrix.goos }}" = "windows" ]; then
-            GOOS=${{ matrix.goos }} GOARCH=${{ matrix.goarch }} go build -o build/app.exe main.go
+            GOOS=windows GOARCH=amd64 go build -o build/app.exe main.go
           else
-            GOOS=${{ matrix.goos }} GOARCH=${{ matrix.goarch }} go build -o build/app main.go
+            GOOS=linux GOARCH=amd64 go build -o build/app main.go
           fi
 
       - name: Upload artifact
