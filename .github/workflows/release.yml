@@ -66,17 +66,19 @@ jobs:
           mkdir build
           go build -ldflags="-H=windowsgui" -o build/app.exe main.go
 
-      # 🐧 Zip Linux
+      # 🐧 Zip Linux (fix overwrite)
       - name: Archive (Linux)
         if: matrix.os == 'linux'
         run: |
+          rm -f app-linux.zip
           cd build
           zip -r ../app-linux.zip .
 
-      # 🪟 Zip Windows
+      # 🪟 Zip Windows (fix overwrite)
       - name: Archive (Windows)
         if: matrix.os == 'windows'
         run: |
+          if (Test-Path app-windows.zip) { Remove-Item app-windows.zip }
           Compress-Archive -Path build\* -DestinationPath app-windows.zip
 
       - uses: actions/upload-artifact@v4
