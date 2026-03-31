@@ -1,0 +1,87 @@
+name: Build (Linux + Windows)
+
+on:
+  workflow_dispatch:
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
+jobs:
+
+  # 🐧 LINUX
+  linux:
+    runs-on: ubuntu-latest
+
+    concurrency:
+      group: build-linux
+      cancel-in-progress: true
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - uses: actions/setup-go@v5
+      with:
+        go-version: '1.22'
+
+    - name: Cache Go modules
+      uses: actions/cache@v4
+      with:
+        path: ~/go/pkg/mod
+        key: linux-go-${{ hashFiles('**/go.sum') }}
+        restore-keys: linux-go-
+
+    - name: Install dependencies (Fyne)
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y \
+          gcc \
+          libgl1-mesa-dev \
+          xorg-dev \
+          libx11-dev \
+          libxcursor-dev \
+          libxrandr-dev \
+          libxinerama-dev \
+          libxi-dev
+
+    - name: Build
+      run: |
+        mkdir -p build
+        CGO_ENABLED=1 GOOS=linux GOARCH=amd64 go build -o build/app main.go
+
+    - uses: actions/upload-artifact@v4
+      with:
+        name: app-linux
+        path: build/
+
+
+  # 🪟 WINDOWS
+  windows:
+    runs-on: windows-latest
+
+    concurrency:
+      group: build-windows
+      cancel-in-progress: true
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - uses: actions/setup-go@v5
+      with:
+        go-version: '1.22'
+
+    - name: Cache Go modules
+      uses: actions/cache@v4
+      with:
+        path: ~/go/pkg/mod
+        key: windows-go-${{ hashFiles('**/go.sum') }}
+        restore-keys: windows-go-
+
+    - name: Build (no console)
+      run: |
+        mkdir build
+        go build -ldflags="-H=windowsgui" -o build/app.exe main.go
+
+    - uses: actions/upload-artifact@v4
+      with:
+        name: app-windows
+        path: build/
