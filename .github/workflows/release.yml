@@ -11,7 +11,6 @@ env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
 jobs:
-
   build:
     name: Build (${{ matrix.os }})
     runs-on: ${{ matrix.runner }}
@@ -21,80 +20,87 @@ jobs:
         include:
           - os: linux
             runner: ubuntu-latest
-            output: app
           - os: windows
             runner: windows-latest
-            output: app.exe
 
     steps:
-    - uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-    - uses: actions/setup-go@v5
-      with:
-        go-version: '1.22'
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.22'
 
-    - name: Cache Go modules
-      uses: actions/cache@v4
-      with:
-        path: ~/go/pkg/mod
-        key: ${{ matrix.os }}-go-${{ hashFiles('**/go.sum') }}
-        restore-keys: ${{ matrix.os }}-go-
+      - name: Cache Go modules
+        uses: actions/cache@v4
+        with:
+          path: ~/go/pkg/mod
+          key: ${{ matrix.os }}-go-${{ hashFiles('**/go.sum') }}
+          restore-keys: ${{ matrix.os }}-go-
 
-    # 🔥 Linux deps (เฉพาะ linux)
-    - name: Install dependencies (Linux)
-      if: matrix.os == 'linux'
-      run: |
-        sudo apt-get update
-        sudo apt-get install -y \
-          gcc \
-          libgl1-mesa-dev \
-          xorg-dev \
-          libx11-dev \
-          libxcursor-dev \
-          libxrandr-dev \
-          libxinerama-dev \
-          libxi-dev
+      # 🐧 Linux deps
+      - name: Install dependencies (Linux)
+        if: matrix.os == 'linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            gcc \
+            libgl1-mesa-dev \
+            xorg-dev \
+            libx11-dev \
+            libxcursor-dev \
+            libxrandr-dev \
+            libxinerama-dev \
+            libxi-dev
 
-    - name: Build
-      run: |
-        mkdir build
-        if [ "${{ matrix.os }}" = "windows" ]; then
-          go build -ldflags="-H=windowsgui" -o build/${{ matrix.output }} main.go
-        else
-          CGO_ENABLED=1 GOOS=linux GOARCH=amd64 go build -o build/${{ matrix.output }} main.go
-        fi
+      # 🐧 Build Linux
+      - name: Build (Linux)
+        if: matrix.os == 'linux'
+        run: |
+          mkdir -p build
+          CGO_ENABLED=1 GOOS=linux GOARCH=amd64 go build -o build/app main.go
 
-    # 🔥 zip ไฟล์แจก
-    - name: Archive
-      run: |
-        cd build
-        if [ "${{ matrix.os }}" = "windows" ]; then
-          powershell Compress-Archive -Path * -DestinationPath ../app-${{ matrix.os }}.zip
-        else
-          zip -r ../app-${{ matrix.os }}.zip .
-        fi
+      # 🪟 Build Windows
+      - name: Build (Windows)
+        if: matrix.os == 'windows'
+        run: |
+          mkdir build
+          go build -ldflags="-H=windowsgui" -o build/app.exe main.go
 
-    - uses: actions/upload-artifact@v4
-      with:
-        name: app-${{ matrix.os }}
-        path: app-${{ matrix.os }}.zip
+      # 🐧 Zip Linux
+      - name: Archive (Linux)
+        if: matrix.os == 'linux'
+        run: |
+          cd build
+          zip -r ../app-linux.zip .
 
+      # 🪟 Zip Windows
+      - name: Archive (Windows)
+        if: matrix.os == 'windows'
+        run: |
+          Compress-Archive -Path build\* -DestinationPath app-windows.zip
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: app-${{ matrix.os }}
+          path: app-${{ matrix.os }}.zip
 
   release:
     needs: build
     runs-on: ubuntu-latest
 
     steps:
-    - name: Download artifacts
-      uses: actions/download-artifact@v4
+      - name: Download artifacts
+        uses: actions/download-artifact@v4
 
-    - name: Create Release
-      uses: softprops/action-gh-release@v2
-      with:
-        tag_name: ${{ github.event.inputs.version }}
-        name: Release ${{ github.event.inputs.version }}
-        files: |
-          app-linux/app-linux.zip
-          app-windows/app-windows.zip
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Debug files
+        run: ls -R
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.event.inputs.version }}
+          name: Release ${{ github.event.inputs.version }}
+          files: |
+            **/*.zip
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
